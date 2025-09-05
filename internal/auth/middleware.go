@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/htanmo/hackernews/internal/jwt"
 	"github.com/htanmo/hackernews/internal/users"
@@ -21,11 +22,17 @@ func Middleware() func(http.Handler) http.Handler {
 			header := r.Header.Get("Authorization")
 
 			if header == "" {
-				next.ServeHTTP(w, r)
+				http.Error(w, "Authorization header must be provided", http.StatusUnauthorized)
 				return
 			}
 
-			tokenStr := header
+			parts := strings.Split(header, " ")
+			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+				http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+				return
+			}
+
+			tokenStr := parts[1]
 			username, err := jwt.ParseToken(tokenStr)
 			if err != nil {
 				http.Error(w, "Invalid token", http.StatusForbidden)
@@ -35,7 +42,7 @@ func Middleware() func(http.Handler) http.Handler {
 			user := users.User{Username: username}
 			id, err := users.GetUserIDByUsername(r.Context(), username)
 			if err != nil {
-				next.ServeHTTP(w, r)
+				http.Error(w, "User not found", http.StatusUnauthorized)
 				return
 			}
 			user.ID = strconv.Itoa(id)
